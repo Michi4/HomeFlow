@@ -18,5 +18,13 @@ model User {
   email     String   @unique
   name      String?
   avatar    String?
+  role      Role     @default(USER)
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum Role {
+  ADMIN
+  DEVELOPER
+  USER
 }
