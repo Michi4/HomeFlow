@@ -12,10 +12,12 @@
   "dependencies": {
     "@nuxt/nitro": "^0.10.0",
     "@nuxtjs/tailwindcss": "^6.12.1",
+    "@prisma/client": "^5.20.0",
     "nuxt": "^3.13.0",
     "nuxt-auth-utils": "^0.3.9",
     "pg": "^8.13.0",
     "pg-hstore": "^2.3.4",
+    "prisma": "^5.20.0",
     "vue": "latest",
     "vue-router": "latest",
     "vuetify": "^3.7.2"
