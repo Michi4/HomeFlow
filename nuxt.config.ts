@@ -1,8 +1,9 @@
-// https://nuxt.com/docs/api/configuration/nuxt-config
 export default defineNuxtConfig({
-  compatibilityDate: '2024-04-03',
-  devtools: { enabled: true },
-  modules: ['nuxt-auth-utils', '@nuxtjs/tailwindcss'],
+  modules: [
+    '@prisma/nuxt',
+    'nuxt-auth-utils',
+    '@nuxtjs/tailwindcss',
+  ],
   runtimeConfig: {
     oauth: {
       github: {
@@ -18,5 +19,20 @@ export default defineNuxtConfig({
       maxAge: 60 * 60 * 24 * 7 // 1 week
     }
   },
-  css: ['@/assets/css/main.css']
-})
+  css: ['@/assets/css/main.css'],
+  tailwindcss: {
+    config: {
+      darkMode: 'class', // or 'media'
+      theme: {
+        extend: {
+          colors: {
+            primary: process.env.VITE_PRIMARY_COLOR || '#4CAF50',
+            darkBackground: process.env.VITE_DARK_MODE_BACKGROUND || '#121212',
+            lightBackground: process.env.VITE_LIGHT_MODE_BACKGROUND || '#FFFFFF',
+          },
+        },
+      },
+      plugins: [],
+    }
+  }
+});
