@@ -1,29 +1,20 @@
 <template>
-    <header class="bg-gray-800 text-white py-4">
-      <div class="container mx-auto flex justify-between items-center">
-        <a href="/" class="text-xl font-bold">My Nuxt App</a>
-        <div>
-          <AuthState v-slot="{ loggedIn, user, clear }">
-            <div v-if="loggedIn" class="flex items-center space-x-4">
-              <span>Welcome, {{ user.name ? user.name : user.login }}</span>
-              <button @click="clear" class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded">
-                Logout
-              </button>
-            </div>
-            <div v-else class="flex items-center space-x-4">
-              <a href="/auth/github" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded">
-                Login with GitHub
-              </a>
-              <a href="/auth/google" class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded">
-                Login with Google
-              </a>
-            </div>
-          </AuthState>
+  <header class="bg-primary text-white shadow-md">
+    <nav class="container mx-auto px-6 py-3">
+      <div class="flex justify-between items-center">
+        <NuxtLink to="/" class="text-2xl font-bold">My App</NuxtLink>
+        <div class="flex space-x-4">
+          <NuxtLink v-if="!session" to="/login" class="hover:text-gray-200">Login</NuxtLink>
+          <NuxtLink v-if="!session" to="/signup" class="hover:text-gray-200">Sign Up</NuxtLink>
+          <button v-if="session" @click="logout" class="hover:text-gray-200">Logout</button>
         </div>
       </div>
-    </header>
-  </template>
-  
-  <script setup>
-  import { useUserSession } from '#auth-utils';
-  </script>
+    </nav>
+  </header>
+</template>
+
+<script setup>
+import { useAuth } from '~/composables/useAuth'
+
+const { session, logout } = useAuth()
+</script>

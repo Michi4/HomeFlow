@@ -19,7 +19,9 @@ export default defineNuxtConfig({
       maxAge: 60 * 60 * 24 * 7 // 1 week
     }
   },
+
   css: ['@/assets/css/main.css'],
+
   tailwindcss: {
     config: {
       darkMode: 'class', // or 'media'
