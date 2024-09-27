@@ -1,51 +1,71 @@
+<script setup lang="ts">
+import type { FormSubmitEvent } from '#ui/types'
+import { z } from 'zod'
+
+const user = useUser()
+if (user.value)
+  await navigateTo('/app')
+
+const schema = z.object({
+  name: z.string(),
+  email: z.string().email('Invalid email'),
+  password: z.string().min(8, 'Must be at least 8 characters'),
+})
+
+type Schema = z.output<typeof schema>
+
+const errorMessage = ref('')
+const state = reactive({
+  name: undefined,
+  email: undefined,
+  password: undefined,
+})
+
+async function onSubmit(event: FormSubmitEvent<Schema>) {
+  const res = await $fetch('/api/auth/signup', {
+    ignoreResponseError: true,
+    method: 'POST',
+    body: event.data,
+    redirect: 'manual',
+  })
+  if (res.success)
+    await navigateTo('/app')
+  else
+    errorMessage.value = res.message
+}
+</script>
+
 <template>
-    <div class="min-h-screen flex items-center justify-center bg-gradient-to-r from-green-400 to-blue-500">
-      <div class="bg-white p-8 rounded-lg shadow-md w-full max-w-md">
-        <h2 class="text-2xl font-bold mb-6 text-center text-primary">Sign Up</h2>
-        <form @submit.prevent="handleSignup" class="space-y-4">
-          <div>
-            <label for="username" class="block text-sm font-medium text-gray-700">Username</label>
-            <input type="text" id="username" v-model="username" required class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary">
-          </div>
-          <div>
-            <label for="email" class="block text-sm font-medium text-gray-700">Email</label>
-            <input type="email" id="email" v-model="email" required class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary">
-          </div>
-          <div>
-            <label for="password" class="block text-sm font-medium text-gray-700">Password</label>
-            <input type="password" id="password" v-model="password" required class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary">
-          </div>
-          <div>
-            <label for="confirmPassword" class="block text-sm font-medium text-gray-700">Confirm Password</label>
-            <input type="password" id="confirmPassword" v-model="confirmPassword" required class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary">
-          </div>
-          <button type="submit" class="w-full bg-primary hover:bg-green-600 text-white font-bold py-2 px-4 rounded transition duration-300 ease-in-out transform hover:scale-105">
-            Sign Up
-          </button>
-        </form>
-        
-        <OauthButtons />
-        
-        <p class="mt-4 text-center text-sm text-gray-600">
-          Already have an account? 
-          <NuxtLink to="/login" class="font-medium text-primary hover:text-green-600">
-            Login
-          </NuxtLink>
-        </p>
-      </div>
-    </div>
-  </template>
-  
-  <script setup>
-  import { ref } from 'vue'
-  
-  const username = ref('')
-  const email = ref('')
-  const password = ref('')
-  const confirmPassword = ref('')
-  
-  const handleSignup = () => {
-    // Implement signup logic here
-    console.log('Signup attempt:', username.value, email.value, password.value)
-  }
-  </script>
+  <h1 class="text-3xl font-medium mb-4 text-center mt-12 lg:mt-52 my-8">
+    Sign up
+  </h1>
+  <UCard class="max-w-sm mx-auto">
+    <UButton block class="mb-4" variant="outline" color="gray" to="/auth/google" external>
+      <UIcon name="i-logos-google-icon" class="h-6 w-6 m-1" /> Sign in with Google
+    </UButton>
+    <UDivider class="my-4" label="OR" />
+    <UAlert v-if="errorMessage" :title="errorMessage" class="mb-2" variant="soft" color="orange" />
+    <UForm :schema="schema" :state="state" class="space-y-4" @submit="onSubmit">
+      <UFormGroup label="Name" name="name">
+        <UInput v-model="state.name" />
+      </UFormGroup>
+
+      <UFormGroup label="Email" name="email">
+        <UInput v-model="state.email" />
+      </UFormGroup>
+
+      <UFormGroup label="Password" name="password">
+        <UInput v-model="state.password" type="password" />
+      </UFormGroup>
+
+      <UButton type="submit">
+        Submit
+      </UButton>
+      <p class="text-sm mt-4">
+        Already have an account? <NuxtLink to="/login" class="text-primary">
+          Sign in
+        </NuxtLink>
+      </p>
+    </UForm>
+  </UCard>
+</template>

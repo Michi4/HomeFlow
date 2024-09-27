@@ -1,30 +1,41 @@
 {
   "name": "nuxt-app",
-  "private": true,
   "type": "module",
+  "private": true,
   "scripts": {
     "build": "nuxt build",
     "dev": "nuxt dev",
     "generate": "nuxt generate",
     "preview": "nuxt preview",
-    "postinstall": "nuxt prepare"
+    "postinstall": "nuxt prepare",
+    "db:push": "drizzle-kit push:pg",
+    "db:gen": "drizzle-kit generate:pg",
+    "start": "node .output/server/index.mjs",
+    "lint": "eslint . --fix",
+    "prepare": "husky install"
   },
   "dependencies": {
-    "@nuxt/nitro": "^0.10.0",
-    "@nuxtjs/tailwindcss": "^6.12.1",
-    "@prisma/nuxt": "^0.0.35",
-    "bcrypt": "^5.1.1",
-    "jsonwebtoken": "^9.0.2",
-    "nuxt": "^3.13.0",
-    "nuxt-auth-utils": "^0.3.9",
-    "pg": "^8.13.0",
-    "pg-hstore": "^2.3.4",
-    "prisma": "^5.20.0",
-    "vue": "latest",
-    "vue-router": "latest",
-    "vuetify": "^3.7.2"
+    "@iconify/json": "^2.2.166",
+    "@lucia-auth/adapter-postgresql": "^2.0.2",
+    "@lucia-auth/oauth": "^3.5.1",
+    "@nuxt/ui": "^2.11.1",
+    "drizzle-orm": "^0.29.3",
+    "lucia": "^2.7.6",
+    "postgres": "^3.4.3",
+    "slugify": "^1.6.6",
+    "stripe": "^14.25.0",
+    "uid": "^2.0.2"
   },
   "devDependencies": {
-    "@prisma/client": "^5.20.0"
+    "@antfu/eslint-config": "^2.6.2",
+    "@formkit/auto-animate": "^0.8.1",
+    "@nuxtjs/plausible": "latest",
+    "@nuxtjs/tailwindcss": "latest",
+    "drizzle-kit": "^0.20.10",
+    "eslint": "^8.56.0",
+    "husky": "^8.0.0",
+    "nuxt": "^3.9.1",
+    "vue": "^3.4.6",
+    "vue-router": "^4.2.5"
   }
 }
