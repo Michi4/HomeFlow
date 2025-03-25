@@ -2,7 +2,13 @@ import { DriverRuntime } from './runtime'
 import { getDriver, registerDriver } from './registry'
 import { loadDriverFromFile } from './loader'
 import { db } from '../db/client'
-import { drivers as driversTable } from '../db/schema'
+import {
+  drivers as driversTable,
+  devices as devicesTable,
+  deviceProperties,
+  deviceData,
+  deviceCurrentData
+} from '../db/schema'
 import { eq } from 'drizzle-orm'
 import path from 'path'
 import chokidar from 'chokidar'
@@ -79,4 +85,22 @@ export async function watchForNewDrivers() {
   })
 
   console.log('[watcher] Driver directory watch initialized')
+}
+
+// --- Device Data Routes ---
+
+export async function getAllDevices() {
+  return await db.select().from(devicesTable)
+}
+
+export async function getDeviceProperties(deviceId: number) {
+  return await db.select().from(deviceProperties).where(eq(deviceProperties.deviceId, deviceId))
+}
+
+export async function getDeviceData(propertyId: number) {
+  return await db.select().from(deviceData).where(eq(deviceData.propertyId, propertyId))
+}
+
+export async function getDeviceCurrentData(propertyId: number) {
+  return await db.select().from(deviceCurrentData).where(eq(deviceCurrentData.propertyId, propertyId))
 }
