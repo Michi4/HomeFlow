@@ -103,6 +103,7 @@ export const deviceGroups = pgTable('device_groups', {
 export const devices = pgTable('devices', {
   id: serial('id').primaryKey(),
   name: text('name').notNull(),
+  label: text('label'),
   driverId: integer('driver_id'),
   groupId: integer('group_id'),
   type: text('type').notNull(), // 'sensor', 'actor', 'hybrid'

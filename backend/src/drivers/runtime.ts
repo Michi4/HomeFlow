@@ -1,171 +1,208 @@
-import { BaseDriver, DriverDeviceDefinition } from './types'
+import { BaseDriver, DriverDeviceDefinition, DriverEvent } from './types'
 import { db } from '../db/client'
-import { devices, deviceData, deviceCurrentData, deviceProperties, drivers } from '../db/schema'
+import {
+  devices as devicesTable,
+  deviceGroups,
+  deviceProperties,
+  deviceData,
+  deviceCurrentData,
+} from '../db/schema'
 import { eq } from 'drizzle-orm'
-import fs from 'fs/promises'
-import path from 'path'
-
-export type DriverStatus = 'loaded' | 'started' | 'stopped' | 'error'
 
 export class DriverRuntime {
-  public status: DriverStatus = 'loaded'
-  public readonly instance: BaseDriver
-  private config: any
-  private intervalId?: NodeJS.Timeout
-  private pollInterval: number
+  private driver: BaseDriver
+  private config: Record<string, any>
+  private deviceDefs: DriverDeviceDefinition[] = []
+  private eventSubscribers: ((event: DriverEvent) => void)[] = []
+  public readonly driverId: number
+  public readonly driverType: string
 
-  constructor(instance: BaseDriver, config: any, defaultInterval = 10000) {
-    this.instance = instance
+  constructor(driver: BaseDriver, config: Record<string, any>) {
+    this.driver = driver
     this.config = config
-    this.pollInterval = config.pollInterval || defaultInterval
+    this.driverId = config.driverId
+    this.driverType = driver.type
   }
 
   async init() {
-    await this.instance.init?.(this.config)
+    await this.driver.init?.(this.config)
+    this.deviceDefs = (await this.driver.getDevices?.()) || []
+
+    for (const def of this.deviceDefs) {
+      await this.ensureDeviceInDb(def)
+    }
+
+    this.driver.onEvent?.((event) => {
+      this.handleEvent(event)
+      this.eventSubscribers.forEach((cb) => cb(event))
+    })
   }
 
   async start() {
-    if (this.status === 'started') return
-    await this.instance.start?.()
-    await this.ensureDevicesRegistered()
-
-    if (this.instance.poll) {
-      this.intervalId = setInterval(async () => {
-        try {
-          const result = await this.instance.poll?.()
-          for (const [deviceId, props] of Object.entries(result ?? {})) {
-            for (const [key, value] of Object.entries(props)) {
-              const [property] = await db
-                .select()
-                .from(deviceProperties)
-                .where(eq(deviceProperties.key, key))
-
-              if (property) {
-                await db.insert(deviceData).values({
-                  propertyId: property.id,
-                  value: String(value),
-                  timestamp: new Date(),
-                })
-
-                await db
-                  .insert(deviceCurrentData)
-                  .values({
-                    propertyId: property.id,
-                    value: String(value),
-                    updatedAt: new Date(),
-                  })
-                  .onConflictDoUpdate({
-                    target: deviceCurrentData.propertyId,
-                    set: {
-                      value: String(value),
-                      updatedAt: new Date(),
-                    },
-                  })
-              }
-            }
-          }
-        } catch (e) {
-          console.error(`[${this.instance.name}] Poll error:`, e)
-        }
-      }, this.pollInterval)
-    }
-
-    this.status = 'started'
+    await this.driver.start?.()
   }
 
   async stop() {
-    await this.instance.stop?.()
-    if (this.intervalId) clearInterval(this.intervalId)
-    this.status = 'stopped'
+    await this.driver.stop?.()
   }
 
-  async destroy() {
+  async reload(config: Record<string, any>) {
     await this.stop()
-    await this.instance.destroy?.()
-    this.status = 'loaded'
-  }
-
-  async reload(config?: any) {
-    await this.destroy()
-    if (config) this.config = config
-    await this.init()
+    await this.driver.init?.(config)
     await this.start()
   }
 
-  getStatus() {
-    return this.status
+  subscribeToEvents(cb: (event: DriverEvent) => void) {
+    this.eventSubscribers.push(cb)
   }
 
-  private async ensureDevicesRegistered() {
-    if (!this.instance.getDevices) return
-    const devicesDefined = await this.instance.getDevices()
+  async handleEvent(event: DriverEvent) {
+    const { deviceId, propertyKey, value, timestamp = new Date() } = event
+    if (!deviceId || !propertyKey) return
 
-    for (const dev of devicesDefined) {
-      const [existingDevice] = await db
-        .select()
-        .from(devices)
-        .where(eq(devices.name, dev.name))
+    const dbDeviceId = await this.ensureDynamicDevice(deviceId, propertyKey, value)
+    if (!dbDeviceId) return
 
-      let deviceId: number
-      if (!existingDevice) {
-        const inserted = await db
-          .insert(devices)
-          .values({
-            name: dev.name,
-            type: dev.type,
-            config: {},
-            driverId: this.config.driverId,
-            createdAt: new Date(),
-          })
-          .returning({ id: devices.id })
-        deviceId = inserted[0].id
+    const prop = await db
+      .select()
+      .from(deviceProperties)
+      .where(eq(deviceProperties.deviceId, dbDeviceId))
+      .then((props) => props.find((p) => p.key === propertyKey))
+
+    if (!prop) return
+
+    await db.insert(deviceData).values({
+      propertyId: prop.id,
+      value: String(value),
+      timestamp,
+    })
+
+    await db.insert(deviceCurrentData)
+      .values({
+        propertyId: prop.id,
+        value: String(value),
+        updatedAt: timestamp,
+      })
+      .onConflictDoUpdate({
+        target: deviceCurrentData.propertyId,
+        set: {
+          value: String(value),
+          updatedAt: timestamp,
+        },
+      })
+  }
+
+  private async ensureDeviceInDb(def: DriverDeviceDefinition) {
+    const existing = await db
+      .select()
+      .from(devicesTable)
+      .where(eq(devicesTable.name, def.name))
+
+    let deviceId: number
+    let groupId: number | null = null
+
+    if (def.group) {
+      const existingGroup = await db.select().from(deviceGroups).where(eq(deviceGroups.name, def.group))
+      if (existingGroup.length > 0) {
+        groupId = existingGroup[0].id
       } else {
-        deviceId = existingDevice.id
+        const [createdGroup] = await db.insert(deviceGroups).values({ name: def.group }).returning()
+        groupId = createdGroup.id
       }
+    }
 
-      for (const prop of dev.properties) {
-        const exists = await db
-          .select()
-          .from(deviceProperties)
-          .where(eq(deviceProperties.deviceId, deviceId))
-          .then(rows => rows.find(p => p.key === prop.key))
+    if (existing.length === 0) {
+      const [created] = await db
+        .insert(devicesTable)
+        .values({
+          name: def.name,
+          label: def.label,
+          driverId: this.driverId,
+          groupId,
+          type: def.type,
+          config: {},
+        })
+        .returning()
 
-        if (!exists) {
-          await db.insert(deviceProperties).values({
-            deviceId,
-            key: prop.key,
-            valueType: prop.valueType,
-            unit: prop.unit,
-            writable: prop.writable ?? false,
-          })
+      deviceId = created.id
+    } else {
+      deviceId = existing[0].id
+    }
+
+    for (const prop of def.properties) {
+      const found = await db
+        .select()
+        .from(deviceProperties)
+        .where(
+          eq(deviceProperties.deviceId, deviceId)
+        )
+        .then((props) => props.find((p) => p.key === prop.key))
+
+      if (!found) {
+        await db.insert(deviceProperties).values({
+          deviceId,
+          key: prop.key,
+          valueType: prop.valueType,
+          writable: prop.writable ?? false,
+          unit: prop.unit,
+        })
+      }
+    }
+  }
+
+  private async ensureDynamicDevice(id: string, propertyKey: string, value: any): Promise<number | null> {
+    let device = await db.select().from(devicesTable).where(eq(devicesTable.name, id))
+
+    if (device.length === 0) {
+      const def = this.deviceDefs.find((d) => d.id === id)
+
+      let groupId: number | null = null
+      if (def?.group) {
+        const existingGroup = await db.select().from(deviceGroups).where(eq(deviceGroups.name, def.group))
+        if (existingGroup.length > 0) {
+          groupId = existingGroup[0].id
+        } else {
+          const [createdGroup] = await db.insert(deviceGroups).values({ name: def.group }).returning()
+          groupId = createdGroup.id
         }
       }
+
+      const [created] = await db
+        .insert(devicesTable)
+        .values({
+          name: id,
+          label: def?.label ?? id,
+          driverId: this.driverId,
+          groupId,
+          type: def?.type ?? 'sensor',
+          config: {},
+        })
+        .returning()
+      device = [created]
     }
+
+    const deviceId = device[0].id
+
+    const props = await db
+      .select()
+      .from(deviceProperties)
+      .where(eq(deviceProperties.deviceId, deviceId))
+
+    const propExists = props.some((p) => p.key === propertyKey)
+
+    if (!propExists) {
+      await db.insert(deviceProperties).values({
+        deviceId,
+        key: propertyKey,
+        valueType: typeof value === 'number' ? 'number' : typeof value === 'boolean' ? 'boolean' : 'string',
+        writable: false,
+      })
+    }
+
+    return deviceId
   }
 
-  // Automatically find new drivers in ./drivers and insert into DB if missing
-  static async discoverDrivers(folderPath: string = './drivers') {
-    const files = await fs.readdir(folderPath)
-
-    for (const file of files) {
-      if (!file.endsWith('.ts') && !file.endsWith('.js')) continue
-      const name = path.basename(file, path.extname(file))
-      const fullPath = path.join(folderPath, file)
-
-      const [existing] = await db.select().from(drivers).where(eq(drivers.name, name))
-
-      if (!existing) {
-        await db.insert(drivers).values({
-          name,
-          type: 'custom',
-          sourcePath: fullPath,
-          uploaded: false,
-          config: {},
-          enabled: false,
-        })
-
-        console.log(`[driver discovery] Registered new driver '${name}' at ${fullPath}`)
-      }
-    }
+  async send(key: string, value: any) {
+    await this.driver.send?.(key, value)
   }
 }

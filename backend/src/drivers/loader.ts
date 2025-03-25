@@ -7,6 +7,7 @@ import { drivers } from '../db/schema'
 import { eq } from 'drizzle-orm'
 import { DriverRuntime } from './runtime'
 import { registerDriver } from './registry'
+import { drivers as driversTable } from '../db/schema'
 
 export async function loadAndStartAllDrivers() {
   const allDrivers = await db.select().from(drivers).where(eq(drivers.enabled, true))
@@ -43,4 +44,31 @@ export async function loadDriverFromFile(filepath: string): Promise<BaseDriver> 
     throw new Error('Invalid driver: missing init()')
   }
   return driver
+}
+
+export async function discoverDrivers() {
+  const dir = path.resolve('drivers')
+  const files = await fs.readdir(dir)
+
+  for (const file of files) {
+    if (!file.endsWith('.ts') && !file.endsWith('.js')) continue
+    const name = path.basename(file, path.extname(file))
+
+    const existing = await db
+    .select()
+    .from(driversTable)
+    .where(eq(driversTable.name, name))
+
+    if (existing.length === 0) {
+      await db.insert(driversTable).values({
+        name,
+        type: 'custom',
+        sourcePath: `drivers/${file}`,
+        uploaded: false,
+        enabled: false,
+      })
+
+      console.log(`[discover] Registered new driver '${name}' at drivers/${file}`)
+    }
+  }
 }

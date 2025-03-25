@@ -2,7 +2,7 @@ import 'dotenv/config'
 import { Hono } from 'hono'
 import { serve } from '@hono/node-server'
 import { cors } from 'hono/cors'
-import { DriverRuntime } from './drivers/runtime'
+import { discoverDrivers } from './drivers/loader'
 import { loadAndStartAllDrivers } from './drivers/loader'
 import { watchForNewDrivers } from './drivers/registry'
 
@@ -21,7 +21,7 @@ app.route('/api/data', dataRoutes)
 
 const start = async () => {
   console.log('[boot] discovering drivers')
-  await DriverRuntime.discoverDrivers()
+  await discoverDrivers()
   await watchForNewDrivers()
 
   console.log('[boot] loading + starting all enabled drivers')

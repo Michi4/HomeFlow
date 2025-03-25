@@ -23,6 +23,7 @@ export interface DriverDeviceDefinition {
     id: string // unique within driver
     name: string
     type: 'sensor' | 'actor' | 'hybrid'
+    label?: string
     properties: {
       key: string
       valueType: 'string' | 'number' | 'boolean'

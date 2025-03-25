@@ -1,9 +1,10 @@
+// backend/src/drivers/mqtt.ts
 import mqtt from 'mqtt'
-import { BaseDriver, DriverDeviceDefinition, DriverEvent } from '../src/drivers/types'
+import { BaseDriver, DriverDeviceDefinition, DriverEvent } from './types'
 
 let client: mqtt.MqttClient
-const devices: DriverDeviceDefinition[] = []
 let emit: ((event: DriverEvent) => void) | undefined
+const devices: DriverDeviceDefinition[] = []
 
 const mqttDriver: BaseDriver = {
   name: 'MQTT',
@@ -20,40 +21,51 @@ const mqttDriver: BaseDriver = {
     } = config
 
     const url = `mqtt://${host}:${port}`
-
     client = mqtt.connect(url, { username, password, clientId })
 
     client.on('connect', () => {
-      console.log('[mqtt] connected to', url)
+      console.log('[mqtt] Connected to', url)
       for (const topic of topics) {
         client.subscribe(topic)
-        console.log('[mqtt] subscribed to', topic)
+        console.log('[mqtt] Subscribed to', topic)
       }
     })
 
     client.on('message', (topic, payload) => {
       const value = payload.toString()
-      console.log(`[mqtt] 🔥 Received on ${topic}:`, value) // <--- ADD THIS
       const deviceId = `mqtt:${topic}`
 
+      const topicParts = topic.split('/')
+      const group = topicParts.slice(0, -1).join('/')
+      const shortKey = topicParts.at(-1) ?? 'value'
+
+      const label = topicParts
+        .slice(-3) // Use last 3 segments
+        .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+        .join(' > ')
+
       if (!devices.find((d) => d.id === deviceId)) {
-        devices.push({
+        const def: DriverDeviceDefinition = {
           id: deviceId,
-          name: `MQTT ${topic}`,
+          name: deviceId,
+          label,
+          group,
           type: 'sensor',
           properties: [
             {
-              key: 'value',
+              key: shortKey,
               valueType: 'string',
-              writable: false,
+              writable: topic.startsWith('cmnd/') || topic.includes('/set'),
             },
           ],
-        })
+        }
+
+        devices.push(def)
       }
 
       emit?.({
         deviceId,
-        propertyKey: 'value',
+        propertyKey: shortKey,
         value,
         timestamp: new Date(),
       })
@@ -74,9 +86,8 @@ const mqttDriver: BaseDriver = {
     return devices
   },
 
-  async send(key, value) {
-    // Write to topic directly
-    client?.publish(key, String(value))
+  async send(topic, value) {
+    client?.publish(topic, String(value))
   },
 }
 
