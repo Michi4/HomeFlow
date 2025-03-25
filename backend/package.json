@@ -14,10 +14,12 @@
   "packageManager": "pnpm@10.6.5",
   "dependencies": {
     "@hono/node-server": "^1.14.0",
+    "@types/mqtt": "^2.5.0",
     "better-auth": "^1.2.4",
     "dotenv": "^16.4.7",
     "drizzle-orm": "^0.41.0",
     "hono": "^4.7.5",
+    "mqtt": "^5.10.4",
     "pg": "^8.14.1"
   },
   "devDependencies": {
