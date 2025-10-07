@@ -8,6 +8,7 @@ import { watchForNewDrivers } from './drivers/registry'
 
 import driverRoutes from './routes/drivers'
 import dataRoutes from './routes/data'
+import { devicesRoute } from './routes/devices'
 
 const app = new Hono()
 
@@ -17,6 +18,7 @@ app.get('/', (c) => c.text('Hello from HomeFlow'))
 
 app.route('/api/drivers', driverRoutes)
 app.route('/api/data', dataRoutes)
+app.route('/api/devices', devicesRoute)
 
 
 const start = async () => {

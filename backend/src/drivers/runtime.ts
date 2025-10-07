@@ -1,4 +1,11 @@
-import { BaseDriver, DriverDeviceDefinition, DriverEvent } from './types'
+import {
+  BaseDriver,
+  BaseDriverRuntime,
+  DriverContext,
+  DriverDeviceDefinition,
+  DriverEvent,
+} from './types'
+
 import { db } from '../db/client'
 import {
   devices as devicesTable,
@@ -7,35 +14,59 @@ import {
   deviceData,
   deviceCurrentData,
 } from '../db/schema'
+
 import { eq } from 'drizzle-orm'
+
+const driverRuntimes: Record<string, BaseDriverRuntime> = {}
+const eventListeners: Record<string, ((event: DriverEvent) => void)[]> = {}
+
+const context: DriverContext = {
+  getDriver(type) {
+    return driverRuntimes[type]
+  },
+  subscribeToDriverEvents(type, cb) {
+    if (!eventListeners[type]) eventListeners[type] = []
+    eventListeners[type].push(cb)
+  },
+}
+
+export async function loadDriver(type: string, driver: BaseDriver, config: any) {
+  const runtime = new DriverRuntime(driver, config)
+  await runtime.init()
+  driverRuntimes[type] = {
+    driver,
+    config,
+    send: (deviceId, propertyKey, value) => driver.send?.(deviceId, propertyKey, value, context),
+    runAction: (deviceId, action, args) => driver.runAction?.(deviceId, action, args, context),
+    getDevices: () => driver.getDevices?.() || [],
+  }
+}
+
+export function getDriverRuntimeByType(type: string) {
+  return driverRuntimes[type]
+}
 
 export class DriverRuntime {
   private driver: BaseDriver
   private config: Record<string, any>
   private deviceDefs: DriverDeviceDefinition[] = []
-  private eventSubscribers: ((event: DriverEvent) => void)[] = []
   public readonly driverId: number
-  public readonly driverType: string
 
   constructor(driver: BaseDriver, config: Record<string, any>) {
     this.driver = driver
     this.config = config
     this.driverId = config.driverId
-    this.driverType = driver.type
   }
 
   async init() {
-    await this.driver.init?.(this.config)
+    await this.driver.init?.(this.config, context)
     this.deviceDefs = (await this.driver.getDevices?.()) || []
 
     for (const def of this.deviceDefs) {
       await this.ensureDeviceInDb(def)
     }
 
-    this.driver.onEvent?.((event) => {
-      this.handleEvent(event)
-      this.eventSubscribers.forEach((cb) => cb(event))
-    })
+    this.driver.onEvent?.((event) => this.handleEvent(event))
   }
 
   async start() {
@@ -48,12 +79,8 @@ export class DriverRuntime {
 
   async reload(config: Record<string, any>) {
     await this.stop()
-    await this.driver.init?.(config)
+    await this.driver.init?.(config, context)
     await this.start()
-  }
-
-  subscribeToEvents(cb: (event: DriverEvent) => void) {
-    this.eventSubscribers.push(cb)
   }
 
   async handleEvent(event: DriverEvent) {
@@ -92,6 +119,14 @@ export class DriverRuntime {
       })
   }
 
+  async sendProperty(deviceId: string, propertyKey: string, value: any) {
+    return this.driver.send?.(deviceId, propertyKey, value, context)
+  }
+
+  async runAction(deviceId: string, action: string, args: Record<string, any>) {
+    return this.driver.runAction?.(deviceId, action, args, context)
+  }
+
   private async ensureDeviceInDb(def: DriverDeviceDefinition) {
     const existing = await db
       .select()
@@ -102,11 +137,18 @@ export class DriverRuntime {
     let groupId: number | null = null
 
     if (def.group) {
-      const existingGroup = await db.select().from(deviceGroups).where(eq(deviceGroups.name, def.group))
+      const existingGroup = await db
+        .select()
+        .from(deviceGroups)
+        .where(eq(deviceGroups.name, def.group))
+
       if (existingGroup.length > 0) {
         groupId = existingGroup[0].id
       } else {
-        const [createdGroup] = await db.insert(deviceGroups).values({ name: def.group }).returning()
+        const [createdGroup] = await db
+          .insert(deviceGroups)
+          .values({ name: def.group })
+          .returning()
         groupId = createdGroup.id
       }
     }
@@ -116,7 +158,7 @@ export class DriverRuntime {
         .insert(devicesTable)
         .values({
           name: def.name,
-          label: def.label,
+          label: def.label ?? def.name,
           driverId: this.driverId,
           groupId,
           type: def.type,
@@ -133,9 +175,7 @@ export class DriverRuntime {
       const found = await db
         .select()
         .from(deviceProperties)
-        .where(
-          eq(deviceProperties.deviceId, deviceId)
-        )
+        .where(eq(deviceProperties.deviceId, deviceId))
         .then((props) => props.find((p) => p.key === prop.key))
 
       if (!found) {
@@ -200,9 +240,5 @@ export class DriverRuntime {
     }
 
     return deviceId
-  }
-
-  async send(key: string, value: any) {
-    await this.driver.send?.(key, value)
   }
 }

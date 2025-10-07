@@ -1,4 +1,3 @@
-// backend/src/drivers/mqtt.ts
 import mqtt from 'mqtt'
 import { BaseDriver, DriverDeviceDefinition, DriverEvent } from './types'
 
@@ -40,9 +39,11 @@ const mqttDriver: BaseDriver = {
       const shortKey = topicParts.at(-1) ?? 'value'
 
       const label = topicParts
-        .slice(-3) // Use last 3 segments
+        .slice(-3)
         .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
         .join(' > ')
+
+      const writable = topic.startsWith('cmnd/') || topic.includes('/set')
 
       if (!devices.find((d) => d.id === deviceId)) {
         const def: DriverDeviceDefinition = {
@@ -55,9 +56,10 @@ const mqttDriver: BaseDriver = {
             {
               key: shortKey,
               valueType: 'string',
-              writable: topic.startsWith('cmnd/') || topic.includes('/set'),
+              writable,
             },
           ],
+          capabilities: writable ? ['set'] : [],
         }
 
         devices.push(def)
