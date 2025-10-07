@@ -2,7 +2,7 @@ services:
   db:
     image: timescale/timescaledb:latest-pg14
     container_name: homeflow-db
-    restart: always
+    restart: unless-stopped
     ports:
       - "5432:5432"
     environment:
@@ -10,8 +10,6 @@ services:
       POSTGRES_PASSWORD: homeflow
       POSTGRES_DB: homeflow
     volumes:
-      - db_data:/var/lib/postgresql/data
+      - ./db_data:/var/lib/postgresql/data
       - ./db/init-timescale.sql:/docker-entrypoint-initdb.d/init-timescale.sql:ro
 
-volumes:
-  db_data:

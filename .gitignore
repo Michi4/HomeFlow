@@ -32,3 +32,6 @@ drizzle/
 Thumbs.db
 *.swp
 *.swo
+
+backend/db
+backend/db_data
