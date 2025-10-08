@@ -30,6 +30,7 @@ const start = async () => {
   await loadAndStartAllDrivers()
 
   console.log('[boot] HomeFlow is ready')
+  console.log('[boot] http://localhost:' + Number(process.env.PORT || 3000) )
   serve({ fetch: app.fetch, port: Number(process.env.PORT || 3000) })
 }
 
